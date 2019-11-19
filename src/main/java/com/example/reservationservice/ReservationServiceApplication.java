@@ -19,6 +19,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.ReactiveTransactionManager;
 import org.springframework.transaction.reactive.TransactionalOperator;
 import org.springframework.util.Assert;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 
 @SpringBootApplication
@@ -39,6 +41,18 @@ public class ReservationServiceApplication {
     }
 
 
+}
+
+// a restcontroller that returns a publisher
+@RestController
+@RequiredArgsConstructor
+class ReservationRestController {
+    private final  ReservationRepository reservationRepository;
+
+    @GetMapping ("/reservations")
+    Flux <Reservation> reservationFlux(){
+        return this.reservationRepository.findAll();
+    }
 }
 
 @Log4j2
