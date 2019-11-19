@@ -19,15 +19,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.ReactiveTransactionManager;
 import org.springframework.transaction.reactive.TransactionalOperator;
 import org.springframework.util.Assert;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.reactive.function.server.HandlerFunction;
 import org.springframework.web.reactive.function.server.RouterFunction;
-import org.springframework.web.reactive.function.server.ServerRequest;
 import org.springframework.web.reactive.function.server.ServerResponse;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
-import reactor.util.context.Context;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.stream.Stream;
 
 import static org.springframework.web.reactive.function.server.RouterFunctions.route;
 
@@ -58,6 +56,29 @@ public class ReservationServiceApplication {
     }
 
 
+}
+
+@Service
+class GreetingService {
+    Flux <GreetingResponse> greet (GreetingRequest greetingRequest){
+        return Flux
+                .fromStream(Stream.generate(() -> new GreetingResponse("Hello " + greetingRequest.getName() + " @ " + Instant.now() + " ! ")))
+                .delayElements(Duration.ofMillis(1));
+    }
+}
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+class GreetingRequest{
+    private String name;
+}
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+class GreetingResponse {
+    private String greeting;
 }
 
 // a restcontroller that returns a publisher
@@ -109,7 +130,10 @@ class SampleDataInitializer {
                 .thenMany(this.reservationRepository.findAll())
                 // create a context Key - Value pair : a = b that is visible from within the pipeline
                 // this is available from within anywhere in the code -> .doOnEach(signal -> signal.getContext())
-                .subscriberContext(Context.of("a", "b"))
+                //.subscriberContext(Context.of("a", "b"))
+
+                // move work to other scheduler
+                //.subscribeOn(Schedulers.fromExecutor(Executors.newSingleThreadExecutor()))
                 .subscribe(log::info);
 
 
