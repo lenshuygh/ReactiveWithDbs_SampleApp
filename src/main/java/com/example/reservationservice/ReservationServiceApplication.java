@@ -10,14 +10,9 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.mapping.Document;
-import org.springframework.data.mongodb.repository.Tailable;
 import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
-
-import java.util.function.Consumer;
 
 @SpringBootApplication
 public class ReservationServiceApplication {
@@ -73,24 +68,16 @@ class SampleDataInitializer {
 }
 
 
-interface ReservationRepository extends ReactiveCrudRepository<Reservation, String> {
-    /*
-    if mongoDB is in clustermode and it gets the name below it returns the query below
-    @Tailable
-    Flux<Reservation> findByName(String name);
-    */
-
-
+interface ReservationRepository extends ReactiveCrudRepository<Reservation, Integer> {
 }
 
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-@Document
 class Reservation {
 
     @Id
-    private String id;
+    private Integer id;
 
     private String name;
 }
