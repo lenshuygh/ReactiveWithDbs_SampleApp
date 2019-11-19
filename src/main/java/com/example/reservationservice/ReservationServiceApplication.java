@@ -1,5 +1,6 @@
 package com.example.reservationservice;
 
+import io.r2dbc.spi.ConnectionFactory;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -11,14 +12,27 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.event.EventListener;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.r2dbc.connectionfactory.R2dbcTransactionManager;
 import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.ReactiveTransactionManager;
+import org.springframework.transaction.reactive.TransactionalOperator;
 import org.springframework.util.Assert;
 import reactor.core.publisher.Flux;
 
 @SpringBootApplication
 public class ReservationServiceApplication {
+
+    @Bean
+    ReactiveTransactionManager reactiveTransactionManager (ConnectionFactory connectionFactory){
+        return new R2dbcTransactionManager(connectionFactory);
+    }
+
+    @Bean
+    TransactionalOperator transactionalOperator(ReactiveTransactionManager transactionManager){
+        return TransactionalOperator.create(transactionManager);
+    }
 
     public static void main(String[] args) {
         SpringApplication.run(ReservationServiceApplication.class, args);
@@ -32,6 +46,7 @@ public class ReservationServiceApplication {
 @RequiredArgsConstructor
 class SampleDataInitializer {
 
+    private final ReservationService reservationService;
     private final ReservationRepository reservationRepository;
 
     @EventListener(ApplicationReadyEvent.class)
@@ -46,10 +61,7 @@ class SampleDataInitializer {
 
         // chained
 
-        var saved = Flux
-                .just("Josh", "Madhura", "Mark", "Olga", "Spencer", "Ria", "Stéphane", "Violetta")
-                .map(name -> new Reservation(null, name))
-                .flatMap(this.reservationRepository::save);
+        var saved = this.reservationService.saveAll("Josh", "Madhura", "Mark", "Olga", "Spencer", "Ria", "Stéphane", "Violetta");
 
 
         // everything is deleted async
@@ -79,6 +91,7 @@ interface ReservationRepository extends ReactiveCrudRepository<Reservation, Inte
 @RequiredArgsConstructor
 class ReservationService{
     private final ReservationRepository reservationRepository;
+    private final TransactionalOperator transactionalOperator;
 
     Flux<Reservation> saveAll(String ... names){
 
@@ -93,11 +106,14 @@ class ReservationService{
 
 
         // chained
-        return Flux
+        return
+                this.transactionalOperator.transactional(
+                Flux
                 .fromArray(names)
                 .map(name -> new Reservation(null,name))
                 .flatMap(this.reservationRepository::save)
-                .doOnNext(r -> Assert.isTrue(isValid(r),"the name must have a capital first letter"));
+                .doOnNext(r -> Assert.isTrue(isValid(r),"the name must have a capital first letter"))
+        );
 
     }
 
