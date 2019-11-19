@@ -21,19 +21,36 @@ import org.springframework.transaction.reactive.TransactionalOperator;
 import org.springframework.util.Assert;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.reactive.function.server.HandlerFunction;
+import org.springframework.web.reactive.function.server.RouterFunction;
+import org.springframework.web.reactive.function.server.ServerRequest;
+import org.springframework.web.reactive.function.server.ServerResponse;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.util.context.Context;
+
+import static org.springframework.web.reactive.function.server.RouterFunctions.route;
 
 @SpringBootApplication
 public class ReservationServiceApplication {
 
     @Bean
-    ReactiveTransactionManager reactiveTransactionManager (ConnectionFactory connectionFactory){
+    ReactiveTransactionManager reactiveTransactionManager(ConnectionFactory connectionFactory) {
         return new R2dbcTransactionManager(connectionFactory);
     }
 
     @Bean
-    TransactionalOperator transactionalOperator(ReactiveTransactionManager transactionManager){
+    TransactionalOperator transactionalOperator(ReactiveTransactionManager transactionManager) {
         return TransactionalOperator.create(transactionManager);
+    }
+
+    // functional reactive endpoints
+    // this is a buildermethod so can be chained
+    @Bean
+    RouterFunction<ServerResponse> routes(ReservationRepository reservationRepository) {
+        return route()
+                .GET("/reservations", serverRequest -> ServerResponse.ok().body(reservationRepository.findAll(), Reservation.class))
+                .build();
     }
 
     public static void main(String[] args) {
@@ -44,7 +61,7 @@ public class ReservationServiceApplication {
 }
 
 // a restcontroller that returns a publisher
-@RestController
+/*@RestController
 @RequiredArgsConstructor
 class ReservationRestController {
     private final  ReservationRepository reservationRepository;
@@ -53,7 +70,8 @@ class ReservationRestController {
     Flux <Reservation> reservationFlux(){
         return this.reservationRepository.findAll();
     }
-}
+}*/
+
 
 @Log4j2
 @Component
@@ -89,6 +107,9 @@ class SampleDataInitializer {
                 .deleteAll()
                 .thenMany(saved)
                 .thenMany(this.reservationRepository.findAll())
+                // create a context Key - Value pair : a = b that is visible from within the pipeline
+                // this is available from within anywhere in the code -> .doOnEach(signal -> signal.getContext())
+                .subscriberContext(Context.of("a", "b"))
                 .subscribe(log::info);
 
 
@@ -103,11 +124,11 @@ interface ReservationRepository extends ReactiveCrudRepository<Reservation, Inte
 // transactions.. roll back when not succeeded...all was built on threadlocals... in reactive ReactiveTransactions are used
 @Service
 @RequiredArgsConstructor
-class ReservationService{
+class ReservationService {
     private final ReservationRepository reservationRepository;
     private final TransactionalOperator transactionalOperator;
 
-    Flux<Reservation> saveAll(String ... names){
+    Flux<Reservation> saveAll(String... names) {
 
         /*
         normal
@@ -122,18 +143,18 @@ class ReservationService{
         // chained
         return
                 this.transactionalOperator.transactional(
-                Flux
-                .fromArray(names)
-                .map(name -> new Reservation(null,name))
-                .flatMap(this.reservationRepository::save)
-                .doOnNext(r -> Assert.isTrue(isValid(r),"the name must have a capital first letter"))
-        );
+                        Flux
+                                .fromArray(names)
+                                .map(name -> new Reservation(null, name))
+                                .flatMap(this.reservationRepository::save)
+                                .doOnNext(r -> Assert.isTrue(isValid(r), "the name must have a capital first letter"))
+                );
 
     }
 
 
     // asserts that each name starts with a capital letter
-    private boolean isValid(Reservation reservation){
+    private boolean isValid(Reservation reservation) {
         return Character.isUpperCase(reservation.getName().charAt(0));
     }
 }
