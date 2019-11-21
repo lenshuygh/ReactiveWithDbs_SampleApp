@@ -10,6 +10,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.context.event.EventListener;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.r2dbc.connectionfactory.R2dbcTransactionManager;
@@ -21,10 +22,17 @@ import org.springframework.transaction.reactive.TransactionalOperator;
 import org.springframework.util.Assert;
 import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.ServerResponse;
+import org.springframework.web.reactive.handler.SimpleUrlHandlerMapping;
+import org.springframework.web.reactive.socket.WebSocketHandler;
+import org.springframework.web.reactive.socket.WebSocketMessage;
+import org.springframework.web.reactive.socket.WebSocketSession;
+import org.springframework.web.reactive.socket.server.support.WebSocketHandlerAdapter;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.springframework.web.reactive.function.server.RouterFunctions.route;
@@ -57,13 +65,52 @@ public class ReservationServiceApplication {
 
 
 }
+@Configuration
+class GreetingsWebsocketConfiguration{
 
+    @Bean
+    WebSocketHandler webSocketHandler(GreetingService greetingService){
+        return webSocketSession -> {
+/*
+
+            Flux<WebSocketMessage> receive = webSocketSession.receive();
+            Flux<String> names = receive.map(WebSocketMessage::getPayloadAsText);
+            Flux<GreetingRequest> greetingRequestFlux = names.map(GreetingRequest::new);
+            Flux<GreetingResponse> greetingResponseFlux = greetingRequestFlux.flatMap(greetingService::greet);
+            Flux<String> stringFlux = greetingResponseFlux.map(GreetingResponse::getMessage);
+            Flux<WebSocketMessage> map = stringFlux.map(webSocketSession::textMessage);
+            return webSocketSession.send(map);
+*/
+
+            var receive = webSocketSession.receive()
+                    .map(WebSocketMessage::getPayloadAsText)
+                    .map(GreetingRequest::new)
+                    .flatMap(greetingService::greet)
+                    .map(GreetingResponse::getMessage)
+                    .map(webSocketSession::textMessage);
+            return webSocketSession.send(receive);
+        };
+    }
+
+    @Bean
+    SimpleUrlHandlerMapping simpleUrlHandlerMapping(WebSocketHandler webSocketHandler){
+        return new SimpleUrlHandlerMapping(Map.of("/ws/greetings",webSocketHandler), 10);
+    }
+
+    @Bean
+    WebSocketHandlerAdapter webSocketHandlerAdapter(){
+        return new WebSocketHandlerAdapter();
+    }
+}
+
+
+// create a never-ending stream of data
 @Service
 class GreetingService {
     Flux <GreetingResponse> greet (GreetingRequest greetingRequest){
         return Flux
                 .fromStream(Stream.generate(() -> new GreetingResponse("Hello " + greetingRequest.getName() + " @ " + Instant.now() + " ! ")))
-                .delayElements(Duration.ofMillis(1));
+                .delayElements(Duration.ofSeconds(1));
     }
 }
 
@@ -78,7 +125,8 @@ class GreetingRequest{
 @AllArgsConstructor
 @NoArgsConstructor
 class GreetingResponse {
-    private String greeting;
+    private String message;
+
 }
 
 // a restcontroller that returns a publisher
